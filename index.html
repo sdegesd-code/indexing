@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indexing GESD</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f4f7f6; padding: 20px; margin: 0; }
+        .container { max-width: 500px; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin: auto; }
+        h2 { text-align: center; color: #333; margin-top: 0; }
+        label { margin-top: 15px; display: block; font-size: 14px; color: #555; }
+        input { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        .hidden { display: none !important; }
+        .gps-box { display: flex; gap: 10px; margin-top: 5px; }
+        #gpsBtn { background-color: #17a2b8; width: auto; flex-shrink: 0; }
+        button { width: 100%; padding: 14px; background-color: #28a745; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 25px; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #calculatedDisplay { font-family: monospace; color: #28a745; font-weight: bold; margin-top: 5px; display: block; }
+        .asterisk { color: #1a73e8; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Indexing Data Entry</h2>
+    <form id="indexingForm">
+        
+        <label>Entered Consumer No.</label>
+        <input type="number" id="enteredConsumerNo">
+        <span id="calculatedDisplay"></span>
+
+        <div id="meterContainer" class="hidden">
+            <label>Meter No if consumer no. not availlable <span class="asterisk">*</span></label>
+            <input type="text" id="meterNo">
+        </div>
+
+        <label>DTR No <span class="asterisk">*</span></label>
+        <input type="text" id="dtrNo" required>
+
+        <label>Location <span class="asterisk">*</span></label>
+        <div class="gps-box">
+            <button type="button" id="gpsBtn">📍 Get Location</button>
+            <input type="text" id="locationData" readonly required placeholder="Waiting for GPS...">
+        </div>
+
+        <button type="submit" id="submitBtn">Save</button>
+    </form>
+</div>
+
+<script>
+    // --- 1. PASTE YOUR GOOGLE SCRIPT URL HERE ---
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxiONamqby7wZ1q8ooc9wobsVNb9TzWkueRM7lNnHoAowwhssbFusNA6x2O5Eb_UA4lCw/exec';
+
+    // --- 2. DEVICE ID GENERATOR ---
+    let deviceId = localStorage.getItem('gesd_device_id');
+    if (!deviceId) {
+        deviceId = 'id-' + Math.random().toString(36).substr(2, 16);
+        localStorage.setItem('gesd_device_id', deviceId);
+    }
+
+    // --- 3. DTR MEMORY ---
+    const dtrInput = document.getElementById('dtrNo');
+    const savedDtr = localStorage.getItem('gesd_last_dtr');
+    if (savedDtr) {
+        dtrInput.value = savedDtr; // Auto-fills the last entered DTR
+    }
+
+    // --- 4. CONSUMER CALCULATION & METER LOGIC ---
+    const enteredInput = document.getElementById('enteredConsumerNo');
+    const meterContainer = document.getElementById('meterContainer');
+    const meterInput = document.getElementById('meterNo');
+    const displaySpan = document.getElementById('calculatedDisplay');
+    let finalConsumerNumber = "";
+
+    enteredInput.addEventListener('input', function() {
+        let val = this.value;
+        if (val.trim() === "") {
+            // Show and require Meter No if Consumer is blank
+            displaySpan.textContent = "";
+            finalConsumerNumber = "";
+            meterContainer.classList.remove('hidden');
+            meterInput.setAttribute('required', 'true');
+        } else {
+            // Hide Meter No and calculate 12 digits
+            meterContainer.classList.add('hidden');
+            meterInput.removeAttribute('required');
+            meterInput.value = ""; 
+            
+            let last5 = val.slice(-5).padStart(5, '0');
+            let firstDigit = parseInt(last5.charAt(0));
+            let prefix = firstDigit >= 7 ? "0400100" : "0400000";
+            finalConsumerNumber = prefix + last5;
+            displaySpan.textContent = "Calculated: " + finalConsumerNumber;
+        }
+    });
+    // Trigger on load
+    enteredInput.dispatchEvent(new Event('input'));
+
+    // --- 5. GPS CAPTURE ---
+    document.getElementById('gpsBtn').addEventListener('click', function() {
+        const locInput = document.getElementById('locationData');
+        const btn = document.getElementById('gpsBtn');
+        btn.textContent = "Locating...";
+        
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    locInput.value = position.coords.latitude + ", " + position.coords.longitude;
+                    btn.textContent = "✅ Captured";
+                    btn.style.backgroundColor = "#28a745";
+                },
+                function(error) {
+                    alert("Please turn ON location/GPS in your phone.");
+                    btn.textContent = "📍 Retry GPS";
+                },
+                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+            );
+        }
+    });
+
+    // --- 6. SUBMIT TO GOOGLE SHEETS ---
+    document.getElementById('indexingForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const submitBtn = document.getElementById('submitBtn');
+        
+        if (!document.getElementById('locationData').value) {
+            alert("Please capture GPS Location.");
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Saving...";
+
+        // Remember DTR for the next entry
+        localStorage.setItem('gesd_last_dtr', dtrInput.value);
+
+        const payload = {
+            enteredConsumerNo: enteredInput.value,
+            calculatedConsumer: finalConsumerNumber,
+            meterNo: meterInput.value,
+            dtrNo: dtrInput.value,
+            location: document.getElementById('locationData').value,
+            deviceId: deviceId
+        };
+
+        fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(result => {
+            // Reset fields for the next entry (keeps DTR intact)
+            enteredInput.value = "";
+            meterInput.value = "";
+            document.getElementById('locationData').value = "";
+            document.getElementById('gpsBtn').textContent = "📍 Get Location";
+            document.getElementById('gpsBtn').style.backgroundColor = "#17a2b8";
+            enteredInput.dispatchEvent(new Event('input')); 
+            
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Save";
+        })
+        .catch(error => {
+            alert("Error saving data. Check connection.");
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Save";
+        });
+    });
+</script>
+
+</body>
+</html>
