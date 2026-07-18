@@ -225,33 +225,44 @@
 </script>
     <script>
     // Register the Service Worker
+    // --- PWA INSTALLATION & SMART PROMPT ---
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js');
     }
 
-    // Handle the Install Prompt
     let deferredPrompt;
     const installBtn = document.getElementById('installAppBtn');
+    
+    // Check if they already installed it in the past
+    const hasInstalled = localStorage.getItem('gesd_app_installed');
 
-    window.addEventListener('beforeinstallprompt', (e) => {
-        // Prevent the mini-infobar from appearing on mobile
-        e.preventDefault();
-        // Stash the event so it can be triggered later
-        deferredPrompt = e;
-        // Update UI notify the user they can install the PWA
-        installBtn.classList.remove('hidden');
-    });
+    // Only run the prompt logic if they haven't installed it yet
+    if (!hasInstalled) {
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            // Show the button because they haven't installed it
+            installBtn.classList.remove('hidden');
+        });
 
-    installBtn.addEventListener('click', async () => {
-        // Hide the app provided install promotion
-        installBtn.classList.add('hidden');
-        // Show the install prompt
-        deferredPrompt.prompt();
-        // Wait for the user to respond to the prompt
-        const { outcome } = await deferredPrompt.userChoice;
-        // We no longer need the prompt. Clear it up
-        deferredPrompt = null;
-    });
+        installBtn.addEventListener('click', async () => {
+            installBtn.classList.add('hidden');
+            deferredPrompt.prompt();
+            
+            const { outcome } = await deferredPrompt.userChoice;
+            // If they click 'Accept' on the phone's popup, save to memory
+            if (outcome === 'accepted') {
+                localStorage.setItem('gesd_app_installed', 'true');
+            }
+            deferredPrompt = null;
+        });
+
+        // If the phone successfully installs the app, hide the button forever
+        window.addEventListener('appinstalled', () => {
+            localStorage.setItem('gesd_app_installed', 'true');
+            installBtn.classList.add('hidden');
+        });
+    }
 </script>
 
 </body>
