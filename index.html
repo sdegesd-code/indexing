@@ -12,11 +12,15 @@
         input { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
         .hidden { display: none !important; }
         .gps-box { display: flex; gap: 10px; margin-top: 5px; }
-        #gpsBtn { background-color: #17a2b8; width: auto; flex-shrink: 0; }
-        button { width: 100%; padding: 14px; background-color: #28a745; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 25px; }
+        #gpsBtn { background-color: #17a2b8; width: auto; flex-shrink: 0; color: white; border: none; border-radius: 6px; padding: 12px; font-weight: bold; cursor: pointer; }
+        button[type="submit"] { width: 100%; padding: 14px; background-color: #28a745; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 25px; }
         button:disabled { background-color: #ccc; cursor: not-allowed; }
         #calculatedDisplay { font-family: monospace; color: #28a745; font-weight: bold; margin-top: 5px; display: block; }
         .asterisk { color: #1a73e8; }
+        
+        /* New CSS for the Counters */
+        .stats-box { margin-top: 25px; padding: 15px; background-color: #e9ecef; border-radius: 8px; font-size: 14px; color: #333; text-align: center; }
+        .stats-box span { font-weight: bold; color: #1a73e8; font-size: 16px; }
     </style>
 </head>
 <body>
@@ -45,6 +49,12 @@
 
         <button type="submit" id="submitBtn">Save</button>
     </form>
+
+    <!-- New Counter Box -->
+    <div class="stats-box">
+        <div>Today's Total Entries: <span id="dailyTotalCount">0</span></div>
+        <div style="margin-top: 5px;">Entries for DTR <b id="currentDtrLabel">-</b>: <span id="dtrTotalCount">0</span></div>
+    </div>
 </div>
 
 <script>
@@ -58,14 +68,42 @@
         localStorage.setItem('gesd_device_id', deviceId);
     }
 
-    // --- 3. DTR MEMORY ---
-    const dtrInput = document.getElementById('dtrNo');
-    const savedDtr = localStorage.getItem('gesd_last_dtr');
-    if (savedDtr) {
-        dtrInput.value = savedDtr; // Auto-fills the last entered DTR
+    // --- 3. COUNTER LOGIC (Resets Daily) ---
+    const todayStr = new Date().toLocaleDateString();
+    let storedDate = localStorage.getItem('gesd_date');
+    
+    // If it's a new day, reset the counters to 0
+    if (storedDate !== todayStr) {
+        localStorage.setItem('gesd_date', todayStr);
+        localStorage.setItem('gesd_daily_count', 0);
+        localStorage.setItem('gesd_dtr_counts', JSON.stringify({}));
     }
 
-    // --- 4. CONSUMER CALCULATION & METER LOGIC ---
+    let dailyCount = parseInt(localStorage.getItem('gesd_daily_count')) || 0;
+    let dtrCounts = JSON.parse(localStorage.getItem('gesd_dtr_counts')) || {};
+
+    function updateCounters(dtrValue) {
+        document.getElementById('dailyTotalCount').textContent = dailyCount;
+        let dtrName = dtrValue ? dtrValue.toUpperCase() : "-";
+        document.getElementById('currentDtrLabel').textContent = dtrName;
+        document.getElementById('dtrTotalCount').textContent = dtrCounts[dtrName] || 0;
+    }
+
+    // --- 4. DTR MEMORY & LIVE COUNTER UPDATE ---
+    const dtrInput = document.getElementById('dtrNo');
+    const savedDtr = localStorage.getItem('gesd_last_dtr');
+    
+    if (savedDtr) {
+        dtrInput.value = savedDtr;
+    }
+    
+    // Update the counter display whenever they type a new DTR
+    updateCounters(dtrInput.value);
+    dtrInput.addEventListener('input', function() {
+        updateCounters(this.value);
+    });
+
+    // --- 5. CONSUMER CALCULATION & METER LOGIC ---
     const enteredInput = document.getElementById('enteredConsumerNo');
     const meterContainer = document.getElementById('meterContainer');
     const meterInput = document.getElementById('meterNo');
@@ -75,13 +113,11 @@
     enteredInput.addEventListener('input', function() {
         let val = this.value;
         if (val.trim() === "") {
-            // Show and require Meter No if Consumer is blank
             displaySpan.textContent = "";
             finalConsumerNumber = "";
             meterContainer.classList.remove('hidden');
             meterInput.setAttribute('required', 'true');
         } else {
-            // Hide Meter No and calculate 12 digits
             meterContainer.classList.add('hidden');
             meterInput.removeAttribute('required');
             meterInput.value = ""; 
@@ -93,10 +129,9 @@
             displaySpan.textContent = "Calculated: " + finalConsumerNumber;
         }
     });
-    // Trigger on load
     enteredInput.dispatchEvent(new Event('input'));
 
-    // --- 5. GPS CAPTURE ---
+    // --- 6. GPS CAPTURE ---
     document.getElementById('gpsBtn').addEventListener('click', function() {
         const locInput = document.getElementById('locationData');
         const btn = document.getElementById('gpsBtn');
@@ -112,26 +147,36 @@
                 function(error) {
                     alert("Please turn ON location/GPS in your phone.");
                     btn.textContent = "📍 Retry GPS";
+                    btn.style.backgroundColor = "#17a2b8";
                 },
                 { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
             );
         }
     });
 
-    // --- 6. SUBMIT TO GOOGLE SHEETS ---
+    // --- 7. SUBMIT & CONFIRMATION ---
     document.getElementById('indexingForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        const submitBtn = document.getElementById('submitBtn');
         
         if (!document.getElementById('locationData').value) {
             alert("Please capture GPS Location.");
             return;
         }
 
+        // --- NEW CONFIRMATION POP-UP ---
+        let currentDtr = dtrInput.value.toUpperCase();
+        let displayId = finalConsumerNumber ? "Consumer: " + finalConsumerNumber : "Meter: " + meterInput.value;
+        
+        let isConfirmed = confirm("Are you sure you want to save this data?\n\nDTR: " + currentDtr + "\n" + displayId);
+        
+        if (!isConfirmed) {
+            return; // Stops the submission if they click "Cancel"
+        }
+
+        const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = true;
         submitBtn.textContent = "Saving...";
 
-        // Remember DTR for the next entry
         localStorage.setItem('gesd_last_dtr', dtrInput.value);
 
         const payload = {
@@ -149,7 +194,16 @@
         })
         .then(response => response.json())
         .then(result => {
-            // Reset fields for the next entry (keeps DTR intact)
+            // --- UPDATE COUNTERS AFTER SUCCESSFUL SAVE ---
+            dailyCount++;
+            dtrCounts[currentDtr] = (dtrCounts[currentDtr] || 0) + 1;
+            
+            localStorage.setItem('gesd_daily_count', dailyCount);
+            localStorage.setItem('gesd_dtr_counts', JSON.stringify(dtrCounts));
+            
+            updateCounters(currentDtr);
+
+            // Reset fields
             enteredInput.value = "";
             meterInput.value = "";
             document.getElementById('locationData').value = "";
