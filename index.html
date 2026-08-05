@@ -3,229 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Indexing GESD</title>
+    <title>Location Tracker - Goalpara ESD</title>
     <link rel="manifest" href="manifest.json">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background-color: #f4f7f6; padding: 20px; margin: 0; }
-        .container { max-width: 500px; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin: auto; }
-        h2 { text-align: center; color: #333; margin-top: 0; }
-        label { margin-top: 15px; display: block; font-size: 14px; color: #555; }
-        input { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        :root {
+            --primary: #0f4c81;
+            --primary-hover: #083358;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: var(--bg); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 12px; }
+
         .hidden { display: none !important; }
-        .gps-box { display: flex; gap: 10px; margin-top: 5px; }
-        #gpsBtn { background-color: #17a2b8; width: auto; flex-shrink: 0; color: white; border: none; border-radius: 6px; padding: 12px; font-weight: bold; cursor: pointer; }
-        button[type="submit"] { width: 100%; padding: 14px; background-color: #28a745; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 25px; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        #calculatedDisplay { font-family: monospace; color: #28a745; font-weight: bold; margin-top: 5px; display: block; }
-        .asterisk { color: #1a73e8; }
+
+        /* Install Banner */
+        #installAppBtn {
+            width: 100%;
+            max-width: 480px;
+            padding: 14px;
+            background-color: #10b981;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .app-card { background: var(--card-bg); width: 100%; max-width: 480px; border-radius: 20px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); padding: 28px 24px; border: 1px solid #f1f5f9; }
         
-        /* New CSS for the Counters */
-        .stats-box { margin-top: 25px; padding: 15px; background-color: #e9ecef; border-radius: 8px; font-size: 14px; color: #333; text-align: center; }
-        .stats-box span { font-weight: bold; color: #1a73e8; font-size: 16px; }
+        .brand-header { text-align: center; margin-bottom: 24px; }
+        .brand-logo { height: 65px; width: auto; object-fit: contain; margin-bottom: 12px; }
+        .brand-header h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
+        .brand-header p { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+
+        .styled-input { width: 100%; padding: 14px 16px; border-radius: 12px; border: 1.5px solid #e2e8f0; font-size: 16px; outline: none; transition: all 0.2s ease; background: #fafafa; margin-bottom: 12px; }
+        .styled-input:focus { border-color: var(--primary); background: #ffffff; box-shadow: 0 0 0 4px rgba(15, 76, 129, 0.1); }
+        
+        .btn-primary { width: 100%; padding: 14px; border-radius: 12px; border: none; background-color: var(--primary); color: white; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(15, 76, 129, 0.25); }
+        .btn-primary:hover:not(:disabled) { background-color: var(--primary-hover); }
+        .btn-primary:disabled { background-color: #cbd5e1; cursor: not-allowed; box-shadow: none; }
+
+        .status-badge { text-align: center; font-size: 12px; font-weight: 600; color: var(--text-muted); padding: 6px 12px; border-radius: 20px; background: #f1f5f9; width: fit-content; margin: 0 auto; }
+        
+        .results-section { margin-top: 24px; display: none; }
+        .consumer-chip { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; font-family: monospace; font-size: 16px; font-weight: 700; text-align: center; padding: 10px; border-radius: 10px; margin-bottom: 18px; }
+        
+        .links-grid { display: flex; flex-direction: column; gap: 12px; }
+        .map-card { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-radius: 12px; text-decoration: none; color: white; font-size: 14px; font-weight: 600; }
+        .card-smart { background: linear-gradient(135deg, #10b981, #059669); }
+        .card-arms { background: linear-gradient(135deg, #0284c7, #0369a1); }
+        .card-prepaid { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+        .badge-missing { background: #f1f5f9; color: #94a3b8; font-size: 13px; padding: 12px; border-radius: 12px; text-align: center; border: 1px dashed #cbd5e1; }
+        .error-card { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 14px; border-radius: 12px; text-align: center; font-size: 14px; font-weight: 600; }
+
+        #loginError { color: #dc2626; font-size: 13px; text-align: center; margin-top: 10px; display: none; font-weight: 600; }
+        #mainApp { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>Indexing Data Entry</h2>
-    <button id="installAppBtn" class="hidden" style="background-color: #007bff; margin-bottom: 15px;">📲 Install App to Home Screen</button>
-    <form id="indexingForm">
-        
-        <label>Entered Consumer No.</label>
-        <input type="number" id="enteredConsumerNo">
-        <span id="calculatedDisplay"></span>
+<!-- INBUILT INSTALL BUTTON (Uses the exact .hidden logic from your working app) -->
+<button id="installAppBtn" class="hidden">📲 Install App to Home Screen</button>
 
-        <div id="meterContainer" class="hidden">
-            <label>Meter No if consumer no. not availlable <span class="asterisk">*</span></label>
-            <input type="text" id="meterNo">
-        </div>
+<!-- LOGIN SCREEN -->
+<div class="app-card" id="loginScreen">
+    <div class="brand-header">
+        <img src="logo.png" alt="Logo" class="brand-logo" onerror="this.style.display='none'">
+        <h1>Authorized Access</h1>
+        <p>Goalpara ESD Location Tracker</p>
+    </div>
+    
+    <input type="password" id="passInput" class="styled-input" placeholder="Enter Access PIN" autocomplete="off">
+    <button id="loginBtn" class="btn-primary">Unlock App</button>
+    <div id="loginError">❌ Incorrect PIN. Please try again.</div>
+</div>
 
-        <label>DTR No <span class="asterisk">*</span></label>
-        <input type="text" id="dtrNo" required>
+<!-- MAIN APP SCREEN -->
+<div class="app-card" id="mainApp">
+    <div class="brand-header">
+        <img src="logo.png" alt="Logo" class="brand-logo" onerror="this.style.display='none'">
+        <h1>Location Tracker</h1>
+        <button id="logoutBtn" style="background:none; border:none; color:var(--text-muted); text-decoration:underline; cursor:pointer; font-size:12px; margin-top:5px;">Lock App</button>
+    </div>
 
-        <label>Location <span class="asterisk">*</span></label>
-        <div class="gps-box">
-            <button type="button" id="gpsBtn">📍 Get Location</button>
-            <input type="text" id="locationData" readonly required placeholder="Waiting for GPS...">
-        </div>
+    <div style="margin-bottom: 16px;">
+        <label for="shortInput" style="font-size: 13px; font-weight: 600; margin-bottom: 6px; display:block;">Consumer No. (Last 5 Digits)</label>
+        <input type="number" id="shortInput" class="styled-input" placeholder="e.g. 72136" autocomplete="off">
+        <button id="searchBtn" class="btn-primary" disabled>Search Location</button>
+    </div>
 
-        <button type="submit" id="submitBtn">Save</button>
-    </form>
+    <div id="statusMessage" class="status-badge">⏳ Loading database...</div>
 
-    <!-- New Counter Box -->
-    <div class="stats-box">
-        <div>Today's Total Entries: <span id="dailyTotalCount">0</span></div>
-        <div style="margin-top: 5px;">Entries for DTR <b id="currentDtrLabel">-</b>: <span id="dtrTotalCount">0</span></div>
+    <div id="resultsArea" class="results-section">
+        <div class="consumer-chip" id="displayFullNumber"></div>
+        <div id="linksContainer" class="links-grid"></div>
     </div>
 </div>
 
 <script>
-    // --- 1. PASTE YOUR GOOGLE SCRIPT URL HERE ---
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwC492Uwxw84vHEkjUrCR-0tZkbIyrBeBIMRutPAEdrpsL64rUu5b8W-5JsbGVjiFn61Q/exec';
-
-    // --- 2. DEVICE ID GENERATOR ---
-    let deviceId = localStorage.getItem('gesd_device_id');
-    if (!deviceId) {
-        deviceId = 'id-' + Math.random().toString(36).substr(2, 16);
-        localStorage.setItem('gesd_device_id', deviceId);
-    }
-
-    // --- 3. COUNTER LOGIC (Resets Daily) ---
-    const todayStr = new Date().toLocaleDateString();
-    let storedDate = localStorage.getItem('gesd_date');
-    
-    // If it's a new day, reset the counters to 0
-    if (storedDate !== todayStr) {
-        localStorage.setItem('gesd_date', todayStr);
-        localStorage.setItem('gesd_daily_count', 0);
-        localStorage.setItem('gesd_dtr_counts', JSON.stringify({}));
-    }
-
-    let dailyCount = parseInt(localStorage.getItem('gesd_daily_count')) || 0;
-    let dtrCounts = JSON.parse(localStorage.getItem('gesd_dtr_counts')) || {};
-
-    function updateCounters(dtrValue) {
-        document.getElementById('dailyTotalCount').textContent = dailyCount;
-        let dtrName = dtrValue ? dtrValue.toUpperCase() : "-";
-        document.getElementById('currentDtrLabel').textContent = dtrName;
-        document.getElementById('dtrTotalCount').textContent = dtrCounts[dtrName] || 0;
-    }
-
-    // --- 4. DTR MEMORY & LIVE COUNTER UPDATE ---
-    const dtrInput = document.getElementById('dtrNo');
-    const savedDtr = localStorage.getItem('gesd_last_dtr');
-    
-    if (savedDtr) {
-        dtrInput.value = savedDtr;
-    }
-    
-    // Update the counter display whenever they type a new DTR
-    updateCounters(dtrInput.value);
-    dtrInput.addEventListener('input', function() {
-        updateCounters(this.value);
-    });
-
-    // --- 5. CONSUMER CALCULATION & METER LOGIC ---
-    const enteredInput = document.getElementById('enteredConsumerNo');
-    const meterContainer = document.getElementById('meterContainer');
-    const meterInput = document.getElementById('meterNo');
-    const displaySpan = document.getElementById('calculatedDisplay');
-    let finalConsumerNumber = "";
-
-    enteredInput.addEventListener('input', function() {
-        let val = this.value;
-        if (val.trim() === "") {
-            displaySpan.textContent = "";
-            finalConsumerNumber = "";
-            meterContainer.classList.remove('hidden');
-            meterInput.setAttribute('required', 'true');
-        } else {
-            meterContainer.classList.add('hidden');
-            meterInput.removeAttribute('required');
-            meterInput.value = ""; 
-            
-            let last5 = val.slice(-5).padStart(5, '0');
-            let firstDigit = parseInt(last5.charAt(0));
-            let prefix = firstDigit >= 7 ? "0400100" : "0400000";
-            finalConsumerNumber = prefix + last5;
-            displaySpan.textContent = "Calculated: " + finalConsumerNumber;
-        }
-    });
-    enteredInput.dispatchEvent(new Event('input'));
-
-    // --- 6. GPS CAPTURE ---
-    document.getElementById('gpsBtn').addEventListener('click', function() {
-        const locInput = document.getElementById('locationData');
-        const btn = document.getElementById('gpsBtn');
-        btn.textContent = "Locating...";
-        
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                function(position) {
-                    locInput.value = position.coords.latitude + ", " + position.coords.longitude;
-                    btn.textContent = "✅ Captured";
-                    btn.style.backgroundColor = "#28a745";
-                },
-                function(error) {
-                    alert("Please turn ON location/GPS in your phone.");
-                    btn.textContent = "📍 Retry GPS";
-                    btn.style.backgroundColor = "#17a2b8";
-                },
-                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
-            );
-        }
-    });
-
-    // --- 7. SUBMIT & CONFIRMATION ---
-    document.getElementById('indexingForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        if (!document.getElementById('locationData').value) {
-            alert("Please capture GPS Location.");
-            return;
-        }
-
-        // --- NEW CONFIRMATION POP-UP ---
-        let currentDtr = dtrInput.value.toUpperCase();
-        let displayId = finalConsumerNumber ? "Consumer: " + finalConsumerNumber : "Meter: " + meterInput.value;
-        
-        let isConfirmed = confirm("Are you sure you want to save this data?\n\nDTR: " + currentDtr + "\n" + displayId);
-        
-        if (!isConfirmed) {
-            return; // Stops the submission if they click "Cancel"
-        }
-
-        const submitBtn = document.getElementById('submitBtn');
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Saving...";
-
-        localStorage.setItem('gesd_last_dtr', dtrInput.value);
-
-        const payload = {
-            enteredConsumerNo: enteredInput.value,
-            calculatedConsumer: finalConsumerNumber,
-            meterNo: meterInput.value,
-            dtrNo: dtrInput.value,
-            location: document.getElementById('locationData').value,
-            deviceId: deviceId
-        };
-
-        fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json())
-        .then(result => {
-            // --- UPDATE COUNTERS AFTER SUCCESSFUL SAVE ---
-            dailyCount++;
-            dtrCounts[currentDtr] = (dtrCounts[currentDtr] || 0) + 1;
-            
-            localStorage.setItem('gesd_daily_count', dailyCount);
-            localStorage.setItem('gesd_dtr_counts', JSON.stringify(dtrCounts));
-            
-            updateCounters(currentDtr);
-
-            // Reset fields
-            enteredInput.value = "";
-            meterInput.value = "";
-            document.getElementById('locationData').value = "";
-            document.getElementById('gpsBtn').textContent = "📍 Get Location";
-            document.getElementById('gpsBtn').style.backgroundColor = "#17a2b8";
-            enteredInput.dispatchEvent(new Event('input')); 
-            
-            submitBtn.disabled = false;
-            submitBtn.textContent = "Save";
-        })
-        .catch(error => {
-            alert("Error saving data. Check connection.");
-            submitBtn.disabled = false;
-            submitBtn.textContent = "Save";
-        });
-    });
-</script>
-    <script>
-    // Register the Service Worker
-    // --- PWA INSTALLATION & SMART PROMPT ---
+    // ==========================================
+    // 1. EXTRACTED PWA INSTALLATION LOGIC
+    // ==========================================
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js');
     }
@@ -233,15 +118,14 @@
     let deferredPrompt;
     const installBtn = document.getElementById('installAppBtn');
     
-    // Check if they already installed it in the past
-    const hasInstalled = localStorage.getItem('gesd_app_installed');
+    // Check if installed using a new unique key to prevent cache overlap
+    const hasInstalled = localStorage.getItem('gesd_tracker_installed_v3');
 
-    // Only run the prompt logic if they haven't installed it yet
     if (!hasInstalled) {
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            // Show the button because they haven't installed it
+            // Reveal the button exactly like your Indexing app
             installBtn.classList.remove('hidden');
         });
 
@@ -250,20 +134,134 @@
             deferredPrompt.prompt();
             
             const { outcome } = await deferredPrompt.userChoice;
-            // If they click 'Accept' on the phone's popup, save to memory
             if (outcome === 'accepted') {
-                localStorage.setItem('gesd_app_installed', 'true');
+                localStorage.setItem('gesd_tracker_installed_v3', 'true');
             }
             deferredPrompt = null;
         });
 
-        // If the phone successfully installs the app, hide the button forever
         window.addEventListener('appinstalled', () => {
-            localStorage.setItem('gesd_app_installed', 'true');
+            localStorage.setItem('gesd_tracker_installed_v3', 'true');
             installBtn.classList.add('hidden');
         });
     }
-</script>
 
+    // ==========================================
+    // 2. SECURITY & LOGIN LOGIC
+    // ==========================================
+    const CORRECT_PASSWORD = "gesd2026"; 
+    const loginScreen = document.getElementById('loginScreen');
+    const mainApp = document.getElementById('mainApp');
+    const passInput = document.getElementById('passInput');
+
+    if (localStorage.getItem('gesd_tracker_unlocked') === 'true') {
+        loginScreen.style.display = 'none';
+        mainApp.style.display = 'block';
+        loadDatabase(); 
+    }
+
+    document.getElementById('loginBtn').addEventListener('click', function() {
+        if (passInput.value === CORRECT_PASSWORD) {
+            localStorage.setItem('gesd_tracker_unlocked', 'true');
+            loginScreen.style.display = 'none';
+            mainApp.style.display = 'block';
+            document.getElementById('loginError').style.display = 'none';
+            loadDatabase(); 
+        } else {
+            document.getElementById('loginError').style.display = 'block';
+            passInput.value = ""; 
+        }
+    });
+
+    passInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') document.getElementById('loginBtn').click();
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+        localStorage.removeItem('gesd_tracker_unlocked');
+        mainApp.style.display = 'none';
+        loginScreen.style.display = 'block';
+        passInput.value = "";
+    });
+
+    // ==========================================
+    // 3. DATABASE & SEARCH LOGIC
+    // ==========================================
+    let consumerDatabase = {};
+
+    function loadDatabase() {
+        fetch('data.json')
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(row => {
+                    if (row.ConsumerNo) {
+                        consumerDatabase[row.ConsumerNo.toString().trim()] = row;
+                    }
+                });
+                const status = document.getElementById('statusMessage');
+                status.textContent = "✅ System Ready";
+                status.style.color = "#059669";
+                status.style.background = "#ecfdf5";
+                document.getElementById('searchBtn').disabled = false;
+            })
+            .catch(error => {
+                const status = document.getElementById('statusMessage');
+                status.textContent = "❌ Failed to load data.json";
+                status.style.color = "#dc2626";
+                status.style.background = "#fef2f2";
+            });
+    }
+
+    function isValidCoordinate(lat, long) {
+        if (lat === null || lat === undefined || long === null || long === undefined) return false;
+        let strLat = lat.toString().trim().toLowerCase();
+        let strLong = long.toString().trim().toLowerCase();
+        if (["", "0", "0.0", "nil", "null", "n/a"].includes(strLat)) return false;
+        if (["", "0", "0.0", "nil", "null", "n/a"].includes(strLong)) return false;
+        let numLat = parseFloat(strLat);
+        let numLong = parseFloat(strLong);
+        return !isNaN(numLat) && !isNaN(numLong) && numLat !== 0 && numLong !== 0;
+    }
+
+    function createMapButton(label, lat, long, cssClass) {
+        if (isValidCoordinate(lat, long)) {
+            return `
+                <a href="https://www.google.com/maps?q=${parseFloat(lat)},${parseFloat(long)}" target="_blank" class="map-card ${cssClass}">
+                    <span>📍 ${label}</span>
+                    <span>Open ↗</span>
+                </a>`;
+        }
+        return `<div class="badge-missing">✕ ${label}: Not Available</div>`;
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', function() {
+        let inputVal = document.getElementById('shortInput').value.trim();
+        if (!inputVal) return;
+
+        let last5 = inputVal.slice(-5).padStart(5, '0');
+        let firstDigit = parseInt(last5.charAt(0));
+        let prefix = firstDigit >= 7 ? "0400100" : "0400000";
+        let fullConsumerNumber = prefix + last5;
+
+        document.getElementById('displayFullNumber').textContent = fullConsumerNumber;
+        document.getElementById('resultsArea').style.display = "block";
+
+        let result = consumerDatabase[fullConsumerNumber];
+        let container = document.getElementById('linksContainer');
+
+        if (result) {
+            container.innerHTML = 
+                createMapButton("Smart Meter Location", result.SmartLat, result.SmartLong, "card-smart") +
+                createMapButton("ARMS Postpaid Location", result.ArmsLat, result.ArmsLong, "card-arms") +
+                createMapButton("Prepaid Meter Location", result.PrepaidLat, result.PrepaidLong, "card-prepaid");
+        } else {
+            container.innerHTML = `<div class="error-card">No consumer record found for ${fullConsumerNumber}</div>`;
+        }
+    });
+
+    document.getElementById('shortInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') document.getElementById('searchBtn').click();
+    });
+</script>
 </body>
 </html>
