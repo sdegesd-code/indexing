@@ -19,16 +19,27 @@
         #calculatedDisplay { font-family: monospace; color: #28a745; font-weight: bold; margin-top: 5px; display: block; }
         .asterisk { color: #1a73e8; }
         
-        /* New CSS for the Counters */
         .stats-box { margin-top: 25px; padding: 15px; background-color: #e9ecef; border-radius: 8px; font-size: 14px; color: #333; text-align: center; }
         .stats-box span { font-weight: bold; color: #1a73e8; font-size: 16px; }
+
+        /* NEW OFFLINE UI STYLES */
+        .offline-banner { background: #fff3cd; color: #856404; padding: 12px; border-radius: 8px; text-align: center; font-weight: bold; margin-bottom: 15px; border: 1px solid #ffeeba; display: none; }
+        .sync-btn { background-color: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; margin-top: 8px; cursor: pointer; font-weight: bold; width: 100%; }
+        .sync-btn:hover { background-color: #0056b3; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>Indexing Data Entry</h2>
-    <button id="installAppBtn" class="hidden" style="background-color: #007bff; margin-bottom: 15px;">📲 Install App to Home Screen</button>
+    <button id="installAppBtn" class="hidden" style="background-color: #007bff; margin-bottom: 15px; padding: 10px; width: 100%; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">📲 Install App to Home Screen</button>
+    
+    <!-- NEW OFFLINE BANNER -->
+    <div id="offlineBanner" class="offline-banner">
+        ⚠️ Offline Mode: <span id="pendingCount">0</span> records pending.
+        <button id="syncNowBtn" class="sync-btn">🔄 Sync Now</button>
+    </div>
+
     <form id="indexingForm">
         
         <label>Entered Consumer No.</label>
@@ -52,7 +63,6 @@
         <button type="submit" id="submitBtn">Save</button>
     </form>
 
-    <!-- New Counter Box -->
     <div class="stats-box">
         <div>Today's Total Entries: <span id="dailyTotalCount">0</span></div>
         <div style="margin-top: 5px;">Entries for DTR <b id="currentDtrLabel">-</b>: <span id="dtrTotalCount">0</span></div>
@@ -60,21 +70,35 @@
 </div>
 
 <script>
-    // --- 1. PASTE YOUR GOOGLE SCRIPT URL HERE ---
     const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwC492Uwxw84vHEkjUrCR-0tZkbIyrBeBIMRutPAEdrpsL64rUu5b8W-5JsbGVjiFn61Q/exec';
 
-    // --- 2. DEVICE ID GENERATOR ---
+    // --- 1. PERSISTENT INDEXED-DB SETUP ---
+    let db;
+    const request = indexedDB.open("GESD_OfflineDB", 1);
+    
+    request.onupgradeneeded = function(event) {
+        db = event.target.result;
+        if (!db.objectStoreNames.contains("pending_records")) {
+            // Create a secure table for offline records
+            db.createObjectStore("pending_records", { keyPath: "id", autoIncrement: true });
+        }
+    };
+    
+    request.onsuccess = function(event) {
+        db = event.target.result;
+        updateOfflineUI();
+        syncOfflineData(); // Try to sync on load
+    };
+
+    // --- 2. DEVICE ID & COUNTER LOGIC ---
     let deviceId = localStorage.getItem('gesd_device_id');
     if (!deviceId) {
         deviceId = 'id-' + Math.random().toString(36).substr(2, 16);
         localStorage.setItem('gesd_device_id', deviceId);
     }
 
-    // --- 3. COUNTER LOGIC (Resets Daily) ---
     const todayStr = new Date().toLocaleDateString();
     let storedDate = localStorage.getItem('gesd_date');
-    
-    // If it's a new day, reset the counters to 0
     if (storedDate !== todayStr) {
         localStorage.setItem('gesd_date', todayStr);
         localStorage.setItem('gesd_daily_count', 0);
@@ -91,21 +115,14 @@
         document.getElementById('dtrTotalCount').textContent = dtrCounts[dtrName] || 0;
     }
 
-    // --- 4. DTR MEMORY & LIVE COUNTER UPDATE ---
+    // --- 3. DTR MEMORY & CONSUMER CALCULATION ---
     const dtrInput = document.getElementById('dtrNo');
     const savedDtr = localStorage.getItem('gesd_last_dtr');
+    if (savedDtr) dtrInput.value = savedDtr;
     
-    if (savedDtr) {
-        dtrInput.value = savedDtr;
-    }
-    
-    // Update the counter display whenever they type a new DTR
     updateCounters(dtrInput.value);
-    dtrInput.addEventListener('input', function() {
-        updateCounters(this.value);
-    });
+    dtrInput.addEventListener('input', function() { updateCounters(this.value); });
 
-    // --- 5. CONSUMER CALCULATION & METER LOGIC ---
     const enteredInput = document.getElementById('enteredConsumerNo');
     const meterContainer = document.getElementById('meterContainer');
     const meterInput = document.getElementById('meterNo');
@@ -133,7 +150,7 @@
     });
     enteredInput.dispatchEvent(new Event('input'));
 
-    // --- 6. GPS CAPTURE ---
+    // --- 4. GPS CAPTURE ---
     document.getElementById('gpsBtn').addEventListener('click', function() {
         const locInput = document.getElementById('locationData');
         const btn = document.getElementById('gpsBtn');
@@ -156,8 +173,83 @@
         }
     });
 
-    // --- 7. SUBMIT & CONFIRMATION ---
-    document.getElementById('indexingForm').addEventListener('submit', function(e) {
+    // --- 5. OFFLINE SYNC ENGINE ---
+    function updateOfflineUI() {
+        if (!db) return;
+        const tx = db.transaction("pending_records", "readonly");
+        const store = tx.objectStore("pending_records");
+        const countReq = store.count();
+        
+        countReq.onsuccess = function() {
+            const count = countReq.result;
+            const banner = document.getElementById('offlineBanner');
+            document.getElementById('pendingCount').textContent = count;
+            banner.style.display = count > 0 ? 'block' : 'none';
+        };
+    }
+
+    async function syncOfflineData() {
+        if (!navigator.onLine || !db) return;
+        
+        const syncBtn = document.getElementById('syncNowBtn');
+        syncBtn.textContent = "Syncing...";
+        syncBtn.disabled = true;
+
+        const tx = db.transaction("pending_records", "readonly");
+        const store = tx.objectStore("pending_records");
+        const req = store.getAll();
+
+        req.onsuccess = async function() {
+            const records = req.result;
+            if (records.length === 0) {
+                syncBtn.textContent = "🔄 Sync Now";
+                syncBtn.disabled = false;
+                return;
+            }
+
+            for (let record of records) {
+                try {
+                    const response = await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify(record.payload)
+                    });
+                    
+                    if (response.ok) {
+                        // Delete successfully sent record from IndexedDB
+                        const delTx = db.transaction("pending_records", "readwrite");
+                        delTx.objectStore("pending_records").delete(record.id);
+                    }
+                } catch (e) {
+                    console.log("Sync failed for record, keeping in DB");
+                }
+            }
+            updateOfflineUI();
+            syncBtn.textContent = "🔄 Sync Now";
+            syncBtn.disabled = false;
+        };
+    }
+
+    document.getElementById('syncNowBtn').addEventListener('click', syncOfflineData);
+    window.addEventListener('online', syncOfflineData);
+
+    // --- 6. SUBMIT LOGIC (SMART ROUTING) ---
+    function processSuccessfulSave(currentDtr) {
+        dailyCount++;
+        dtrCounts[currentDtr] = (dtrCounts[currentDtr] || 0) + 1;
+        
+        localStorage.setItem('gesd_daily_count', dailyCount);
+        localStorage.setItem('gesd_dtr_counts', JSON.stringify(dtrCounts));
+        updateCounters(currentDtr);
+
+        enteredInput.value = "";
+        meterInput.value = "";
+        document.getElementById('locationData').value = "";
+        document.getElementById('gpsBtn').textContent = "📍 Get Location";
+        document.getElementById('gpsBtn').style.backgroundColor = "#17a2b8";
+        enteredInput.dispatchEvent(new Event('input')); 
+    }
+
+    document.getElementById('indexingForm').addEventListener('submit', async function(e) {
         e.preventDefault();
         
         if (!document.getElementById('locationData').value) {
@@ -165,20 +257,16 @@
             return;
         }
 
-        // --- NEW CONFIRMATION POP-UP ---
         let currentDtr = dtrInput.value.toUpperCase();
         let displayId = finalConsumerNumber ? "Consumer: " + finalConsumerNumber : "Meter: " + meterInput.value;
         
-        let isConfirmed = confirm("Are you sure you want to save this data?\n\nDTR: " + currentDtr + "\n" + displayId);
-        
-        if (!isConfirmed) {
-            return; // Stops the submission if they click "Cancel"
+        if (!confirm("Are you sure you want to save this data?\n\nDTR: " + currentDtr + "\n" + displayId)) {
+            return; 
         }
 
         const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = true;
         submitBtn.textContent = "Saving...";
-
         localStorage.setItem('gesd_last_dtr', dtrInput.value);
 
         const payload = {
@@ -190,80 +278,74 @@
             deviceId: deviceId
         };
 
-        fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json())
-        .then(result => {
-            // --- UPDATE COUNTERS AFTER SUCCESSFUL SAVE ---
-            dailyCount++;
-            dtrCounts[currentDtr] = (dtrCounts[currentDtr] || 0) + 1;
-            
-            localStorage.setItem('gesd_daily_count', dailyCount);
-            localStorage.setItem('gesd_dtr_counts', JSON.stringify(dtrCounts));
-            
-            updateCounters(currentDtr);
+        if (navigator.onLine) {
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error("Network Error");
+                processSuccessfulSave(currentDtr);
+            } catch (error) {
+                // If fetch fails (weak signal), save to IndexedDB fallback
+                saveToIndexedDB(payload, currentDtr);
+            }
+        } else {
+            // Already offline, route directly to IndexedDB
+            saveToIndexedDB(payload, currentDtr);
+        }
 
-            // Reset fields
-            enteredInput.value = "";
-            meterInput.value = "";
-            document.getElementById('locationData').value = "";
-            document.getElementById('gpsBtn').textContent = "📍 Get Location";
-            document.getElementById('gpsBtn').style.backgroundColor = "#17a2b8";
-            enteredInput.dispatchEvent(new Event('input')); 
-            
-            submitBtn.disabled = false;
-            submitBtn.textContent = "Save";
-        })
-        .catch(error => {
-            alert("Error saving data. Check connection.");
-            submitBtn.disabled = false;
-            submitBtn.textContent = "Save";
-        });
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Save";
     });
-</script>
-    <script>
-    // Register the Service Worker
-    // --- PWA INSTALLATION & SMART PROMPT ---
+
+    function saveToIndexedDB(payload, currentDtr) {
+        if (!db) {
+            alert("Storage error. Please reload app.");
+            return;
+        }
+        const tx = db.transaction("pending_records", "readwrite");
+        const store = tx.objectStore("pending_records");
+        store.add({ payload: payload });
+        
+        tx.oncomplete = function() {
+            alert("📶 No Internet. Saved to secure offline storage.");
+            processSuccessfulSave(currentDtr); // Still update counters and clear form
+            updateOfflineUI();
+        };
+    }
+
+    // --- 7. PWA INSTALLATION ---
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js');
     }
 
     let deferredPrompt;
     const installBtn = document.getElementById('installAppBtn');
-    
-    // Check if they already installed it in the past
     const hasInstalled = localStorage.getItem('gesd_app_installed');
 
-    // Only run the prompt logic if they haven't installed it yet
     if (!hasInstalled) {
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
-            // Show the button because they haven't installed it
             installBtn.classList.remove('hidden');
         });
 
         installBtn.addEventListener('click', async () => {
             installBtn.classList.add('hidden');
             deferredPrompt.prompt();
-            
             const { outcome } = await deferredPrompt.userChoice;
-            // If they click 'Accept' on the phone's popup, save to memory
             if (outcome === 'accepted') {
                 localStorage.setItem('gesd_app_installed', 'true');
             }
             deferredPrompt = null;
         });
 
-        // If the phone successfully installs the app, hide the button forever
         window.addEventListener('appinstalled', () => {
             localStorage.setItem('gesd_app_installed', 'true');
             installBtn.classList.add('hidden');
         });
     }
 </script>
-
 </body>
 </html>
